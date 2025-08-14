@@ -1,0 +1,57 @@
+name: Convert PDFs to Text
+
+on:
+  push:
+    paths:
+      - '**/*.pdf'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  convert-pdfs:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Install poppler-utils
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+          
+      - name: Convert PDFs to text
+        run: |
+          # Enable globstar and nullglob for recursive PDF finding
+          shopt -s globstar nullglob
+          
+          # Find all PDF files recursively
+          for pdf in **/*.pdf; do
+            if [[ -f "$pdf" ]]; then
+              echo "Processing: $pdf"
+              
+              # Compute output path under docs/, preserving directory structure
+              # Remove .pdf extension and add .txt
+              output_path="docs/${pdf%.pdf}.txt"
+              
+              # Ensure parent directory exists
+              mkdir -p "$(dirname "$output_path")"
+              
+              # Convert PDF to text with layout preservation and UTF-8 encoding
+              pdftotext -layout -enc UTF-8 "$pdf" "$output_path"
+              
+              echo "Created: $output_path"
+            fi
+          done
+          
+      - name: Commit converted text files
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'Auto-convert PDFs to text files'
+          commit_user_name: 'github-actions[bot]'
+          commit_user_email: 'github-actions[bot]@users.noreply.github.com'
+          branch: ${{ github.ref_name }}
