@@ -1,0 +1,77 @@
+name: Convert PDFs to UTF-8 Text
+
+on:
+  # Allow manual runs from the Actions UI
+  workflow_dispatch:
+  
+  # Automatically run on pushes to main when PDFs change
+  push:
+    branches: [ main ]
+    paths: 
+      - '**/*.pdf'
+      - '.github/workflows/pdf-to-text.yml'
+  
+  # Optional schedule - run every 30 minutes to catch late PDF uploads
+  schedule:
+    - cron: '*/30 * * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  convert-pdfs:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Install poppler-utils
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y poppler-utils
+    
+    - name: Convert PDFs to text
+      run: |
+        # Create docs directory if it doesn't exist
+        mkdir -p docs
+        
+        # Find all PDF files and convert them
+        find . -name "*.pdf" -type f | while read pdf_file; do
+          echo "Converting: $pdf_file"
+          
+          # Get the base filename without extension
+          base_name=$(basename "$pdf_file" .pdf)
+          
+          # Convert PDF to text and save in docs directory
+          pdftotext "$pdf_file" "docs/${base_name}.txt"
+          
+          if [ $? -eq 0 ]; then
+            echo "Successfully converted $pdf_file to docs/${base_name}.txt"
+          else
+            echo "Failed to convert $pdf_file"
+          fi
+        done
+        
+        # List converted files
+        echo "Converted text files:"
+        ls -la docs/
+    
+    - name: Commit and push converted text files
+      run: |
+        # Configure git
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # Add converted text files
+        git add docs/
+        
+        # Check if there are changes to commit
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "Auto-convert PDFs to UTF-8 text files"
+          git push
+        fi
